@@ -1,0 +1,13 @@
+1、camera 差值  MTK
+1)、确认使用哪个cameraIC
+2)、在主mk中搜索imgsensor 找到main、sub
+3)、在bird/imgsensor/ 搜索找到的main、sub 
+4)、在第三个文件夹里的那个文件，你知道的吧。搜索picture size 把需要配的差值加入。
+5)、打开那个80M的alps\vendor\mediatek\proprietary\packages\apps\Camera\src\com\mediatek\camera\setting\SettingDataBase.java 在里面找对应的camera 差值
+
+
+2、使用命令获取手机memoryinfo
+adb shell dumpsys meminfo
+
+3、设置图标名称双行显示
+setSingleLine(false) BubbleTextView.java

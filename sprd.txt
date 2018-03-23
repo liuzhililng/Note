@@ -1,0 +1,11 @@
+1、外场测试sprdMsgID.txt 路径
+软件对应modem\Tools\DEBUG_TOOL\Logel_for_TD\Bin\Parser\sprdMsgID.txt
+
+2、IMSI锁卡白名单：
+0133410000 460020057573868 0687560000 460023618757985 8704360000 460025515629636
+
+3、展讯平台隐藏虚拟按键
+qemu.hw.mainkys =0 开启，=1 关闭
+
+4、展讯FTP下载
+展讯支持FTP	ftp://ftp.spreadtrum.com	 账号：BIRD_SZ    密码：65509xQQ

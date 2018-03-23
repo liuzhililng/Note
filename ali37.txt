@@ -1,0 +1,25 @@
+1、阿里37项目打开隐藏虚拟按键
+device/alibaba/**/system.prop
+# temporary enables NAV bar (soft keys)
+qemu.hw.mainkeys=0 0 打开虚拟按键  1 隐藏虚拟按键
+
+2、修改开机logo
+vendor\mediatek\proprietary\bootable\bootloader\lk\dev\logo
+宏配置：主make和lk.make 配置完成编译lk
+
+3、电池配置
+电池容量：
+bird/custom/xxxx/kernel/power/mt_battery_meter.h
+#define Q_MAX_POS_50 电池容量    同步bird/make/dtsi修改
+#define OAM_D5 1
+充电电流：
+bird/custom/xxxx/kernel/power/mt_charging.h
+bird/make/xxxx/xxxx.dtsi
+ac_charger_current 
+non_std_ac_charger_current
+
+4、阿里eng版本无法remount解决办法
+adb shell echo "enable 1" > proc/alog
+
+5、阿里贴片工具账号密码：
+账号：Bird-A@Bird.com   密码：vxg#DH@i95TCyw^sJb?p3|Eq
