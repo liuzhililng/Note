@@ -11,3 +11,41 @@ adb shell dumpsys meminfo
 
 3、设置图标名称双行显示
 setSingleLine(false) BubbleTextView.java
+
+4、jack-server 报错
+修改HOME/.jack-settings 和HOME/.jack-server/config.properties 文件中的端口号
+
+5、预置三方apk so文件
+预置so等资源文件
+方法一：预置so等资源文件
+include $(CLEAR_VARS)
+LOCAL_MODULE := wanghai.so
+LOCAL_SRC_FILES := wanghai.so
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE_CLASS := SHARED_LIBRARIES
+LOCAL_MODULE_PATH := $(TARGET_OUT)/lib/
+include $(BUILD_PREBUILT)
+方法二：预置so等资源文件
+include $(CLEAR_VARS)
+LOCAL_MODULE_TAGS := optional
+LOCAL_PREBUILT_LIBS := sdfapk.so sdffff.so
+include $(BUILD_MULTI_PREBUILT)
+备注:上面的方法是把文件预制到system/lib/里面如果要预制到system/lib/hw/下面可以参考下面
+LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw语句改成了
+LOCAL_MODULE_RELATIVE_PATH := hw，然后再重新编译。
+网上说第一个实验path会报错,但是没有验证,实验第2中验证是正常的.
+方法三：预置so等资源文件
+预置so等资源文件，在Android.mk里 添加 这样一句，注意：这样的方式 如果路径不存在，这条指令 执行 失败，但 不会 报错！
+$(shell cp -rf $(LOCAL_PATH)/libs/*.so $(TARGET_OUT)/lib)
+
+6、拨打紧急拨号无通话界面
+[1.Root Cause        ]:当跳转到拨号盘拨打紧急号码时，由于unbindFromServices没有成功导致。由于原生逻辑中延时2sunbindFromServices，而拨打紧急号码从联系人跳转到拨号盘后立刻拨打电话，此时incall service还是绑定状态，没有再次 绑定，导致无通话界面。
+
+[2.Resolution        ]:在onConnected的时候，调用了disconnect，unbindService，但是此时   mInCallServiceConnection 没有置为null。因此导致unBind失败。此时可以直接调用unbindFromServices。
+
+7、设置状态栏无法下拉，power键无法锁屏功能
+        // Add a persistent setting to allow other apps to know the device has been provisioned.
+        Settings.Global.putInt(getContentResolver(), Settings.Global.DEVICE_PROVISIONED, 1);//1 可以下拉，0不能下拉
+8、MTK电池配置走DTS不走custom下的table表
+kernel-3.18-drivers/misc/mediatek/include/mt-plat/mt6580/include/mach/upmu_sw.h 
+define BATTERY_DTS_SUPPORT
