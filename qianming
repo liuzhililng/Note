@@ -1,0 +1,8 @@
+#!/bin/bash
+cert_XSA=`jar tf $1 | grep SA` #获取签名文件在Apk中路径, $1为输入的apk
+#echo  $cert_XSA
+jar xf $1 $cert_XSA #提取签名文件
+echo --------------------------------------------------------------------------
+echo 证书MD5指纹:`keytool -printcert -file $cert_XSA | grep MD5`
+echo --------------------------------------------------------------------------
+rm -rf  `dirname $cert_XSA` #删除提取的文件夹
