@@ -1,0 +1,41 @@
+参考网址：http://source.android.com/source/initializing.html
+
+一、更新系统:
+	1、sudo apt-get update
+
+二、安装JDK（进入jdk-6u45-linux-x64.bin所在文件夹）:
+	1、 chmod 777 jdk-6u45-linux-x64.bin 
+	2、 ./jdk-6u45-linux-x64.bin
+
+三、配置环境变量:
+	1、sudo gedit /etc/profile
+		-->export PATH=$PATH:$HOME/bin:[路径]/sdk5.1/platform-tools:[路径]/sdk5.1/tools:[路径]/GAT_exe_v3.1337.1/gat-linux-x86_64-3:
+	2、source /etc/profile
+	3、javac -version
+
+四、安装包：
+	1、sudo apt-get install libglapi-mesa:i386
+
+2、sudo apt-get install git gnupg flex bison gperf build-essential zip curl libc6-dev libncurses5-dev:i386 x11proto-core-dev libx11-dev:i386 libreadline6-dev:i386 libgl1-mesa-glx:i386 libgl1-mesa-dev g++-multilib mingw32 tofrodos python-markdown libxml2-utils xsltproc zlib1g-dev:i386 gcc-4.4 g++-4.4 -y
+
+3、sudo ln -s /usr/lib/i386-linux-gnu/mesa/libGL.so.1 /usr/lib/i386-linux-gnu/libGL.so
+
+五、gcc、g++:
+	1、gcc -v
+	2、sudo apt-get install gcc-4.4
+	3、sudo apt-get install g++-4.4
+	4、cd /usr/bin
+	5、ls -l gcc*
+	6、sudo mv gcc gcc.bak
+	7、sudo ln -s gcc-4.4 gcc
+	8、ls -l g++*
+	9、sudo mv g++ g++.bak
+	10、sudo ln -s g++-4.4 g++
+	11、gcc -v	
+	12、g++ -v
+
+六、ubuntu 12.04解决txt文件显示乱码问题
+	1、gsettings set org.gnome.gedit.preferences.encodings auto-detected "['UTF-8','GB18030','GB2312','GBK','BIG5','CURRENT','UTF-16']"
+
+七、配置USB访问权限
+	复制smb://192.168.1.75/francs_share/Temp/share_tool/51-android.rules 到 /etc/udev/rules.d/51-android.rules
