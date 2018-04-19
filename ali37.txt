@@ -23,3 +23,6 @@ adb shell echo "enable 1" > proc/alog
 
 5、阿里贴片工具账号密码：
 账号：Bird-A@Bird.com   密码：vxg#DH@i95TCyw^sJb?p3|Eq
+
+getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+        		| WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
