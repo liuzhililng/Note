@@ -1,0 +1,596 @@
+#!/bin/bash
+function gettime {
+	hour=0
+	min=0
+	sec=0
+	now=`date +%s`
+	mtime=$[$now-$1]
+	if [ $mtime -lt 60 ]; then
+		sec=$mtime
+	elif [ $mtime -lt 3600 ]; then
+		min=$[$mtime/60]
+		sec=$[$mtime%60]
+	else
+		hour=$[$mtime/3600]
+		min=$[$mtime%3600/60]
+		sec=$[$mtime%3600%60]
+	fi
+	
+	if [[ ${#hour} -lt 2 ]];then
+		hour="0"$hour
+	fi
+	if [[ ${#min} -lt 2 ]];then
+		min="0"$min
+	fi
+	if [[ ${#sec} -lt 2 ]];then
+		sec="0"$sec
+	fi
+	echo $hour":"$min":"$sec
+}
+function chooseMake() {
+	if [ -d "bird/make/$1" ] && [ -n "$1" ]; then	
+		Ppath=$1	
+	elif [ -d "bird/" ]; then
+		Ppath=(`ls bird/make/`)
+		if [[ ${#Ppath[@]} -ge 1 ]]; then
+			for ((i=0;i<${#Ppath[@]};i++)) ; do
+				echo -e "\033[33m$i.${Ppath[$i]} \033[00m"
+			done
+			read -p "`echo -e "\033[31mChoose the true make \033[00m[0-$[${#Ppath[@]}-1]]:"`" tmp
+			while :; do
+				if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+					if [[ "$tmp" -lt ${#Ppath[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+						Ppath=${Ppath[$tmp]}
+						break
+					fi
+				fi
+				read -p "`echo -e "\033[31mChoose the true make \033[00m[0-$[${#Ppath[@]}-1]]:"`" tmp
+			done
+		fi
+	else
+		echo -e "\033[31m Path Error! \033[00m"
+	fi
+}
+function chooseMode() {
+	if [[ $1 =~ (user|eng|userdebug) ]] && [ -n "$1" ]; then
+		PMode=$1
+	else
+		PMode=(user userdebug eng)
+		for ((i=0;i<${#PMode[@]};i++)) ; do
+			echo -e "\033[33m$i.${PMode[$i]} \033[00m"
+		done
+		read -p "`echo -e "\033[31mChoose [${PMode[@]}] \033[00m[0-$[${#PMode[@]}-1]]:"`" tmp
+		while :; do
+			if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+				if [[ "$tmp" -lt ${#PMode[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+					PMode=${PMode[$tmp]}
+					break
+				fi
+			else
+				PMode=$PMode
+				break
+			fi
+			read -p "`echo -e "\033[31mChoose [${PMode[@]}]  \033[00m[0-$[${#PMode[@]}-1]]:"`" tmp
+		done		
+	fi
+}
+function chooseProject() {
+	if [[ $1 =~ (mtk|sprd) ]] && [ -n "$1" ]; then
+		PProject=$1
+	else
+		PProject=(mtk sprd)
+		for ((i=0;i<${#PProject[@]};i++)) ; do
+			echo -e "\033[33m$i.${PProject[$i]} \033[00m"
+		done
+		read -p "`echo -e "\033[31mChoose [${PProject[@]}] \033[00m[0-$[${#PProject[@]}-1]]:"`" tmp
+		while :; do
+			if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+				if [[ "$tmp" -lt ${#PMode[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+					PProject=${PProject[$tmp]}
+					break
+				fi
+			else
+				PProject=$PProject
+				break
+			fi
+			read -p "`echo -e "\033[31mChoose [${PProject[@]}] \033[00m[0-$[${#PProject[@]}-1]]:"`" tmp
+		done		
+	fi
+}
+function chooseType() {
+	if [[ $1 =~ (new|remake|mipi) ]] && [ -n "$1" ]; then
+		PType=$1
+	else
+		PType=(new remake mipi)
+		for ((i=0;i<${#PType[@]};i++)) ; do
+			echo -e "\033[33m$i.${PType[$i]} \033[00m"
+		done
+		read -p "`echo -e "\033[31mChoose [${PType[@]}] \033[00m[0-$[${#PType[@]}-1]]:"`" tmp
+		while :; do
+			if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+				if [[ "$tmp" -lt ${#PType[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+					PType=${PType[$tmp]}
+					break
+				fi
+			else
+				PType=$PType
+				break
+			fi
+			read -p "`echo -e "\033[31mChoose [${PType[@]}] \033[00m[0-$[${#PType[@]}-1]]:"`" tmp
+		done		
+	fi	
+}
+
+function chooseShell() {
+#			      0         1      2        3     4   5
+	PShell=(公开市场版本 合作型 深度合作型 战略型 CUCC CTA)
+	if [[ $1 =~ [0-5] ]] && [[ -n "$1" ]]; then
+		PShellNum=$1
+	else
+		for ((i=0;i<${#PShell[@]};i++)) ; do
+			echo -e "\033[33m$i.${PShell[$i]} \033[00m"
+		done
+		read -p "`echo -e "\033[31mChoose the project \033[00m[0-$[${#PShell[@]}-1]]:"`" PShellNum
+		while :; do
+			if [ -n "`grep '^[[:digit:]]*$' <<< "$PShellNum"`" ];then
+				if [[ "$PShellNum" -lt ${#PShell[@]} ]] && [[ "$PShellNum" -ge 0 ]]; then
+					break
+				fi
+			else
+				PShellNum=0
+				break
+			fi
+			read -p "`echo -e "\033[31mChoose the project \033[00m[0-$[${#PShell[@]}-1]]:"`" PShellNum
+		done
+	fi
+	if [[ $PShellNum -eq 5 ]]; then
+		PMode=userdebug	
+		sign=false
+	fi
+}
+function chooseSign() {
+	if [[ $1 =~ (true|false) ]] && [ -n "$1" ]; then
+		sign=$1
+	else
+		sign=(true false)
+		for ((i=0;i<${#sign[@]};i++)) ; do
+			echo -e "\033[33m$i.${sign[$i]} \033[00m"
+		done
+		read -p "`echo -e "\033[31mCheck sign \033[00m[0-$[${#sign[@]}-1]]:"`" tmp
+		while :; do
+			if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+				if [[ "$tmp" -lt ${#sign[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+					sign=${sign[$tmp]}
+					break
+				fi
+			else
+				sign=$sign
+				break
+			fi
+			read -p "`echo -e "\033[31mCheck sign \033[00m[0-$[${#sign[@]}-1]]:"`" tmp
+		done		
+	fi
+}
+
+function chooseDMTest() {
+	if [[ $1 =~ (true|false) ]] && [ -n "$1" ]; then
+		DM=$1
+	else
+		DM=(false true)
+		for ((i=0;i<${#DM[@]};i++)) ; do
+			echo -e "\033[33m$i.${DM[$i]} \033[00m"
+		done
+		read -p "`echo -e "\033[31mCheck DM test \033[00m[0-$[${#DM[@]}-1]]:"`" tmp
+		while :; do
+			if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+				if [[ "$tmp" -lt ${#DM[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+					DM=${DM[$tmp]}
+					break
+				fi
+			else
+				DM=$DM
+				break
+			fi
+			read -p "`echo -e "\033[31mCheck DM \033[00m[0-$[${#DM[@]}-1]]:"`" tmp
+		done		
+	fi
+	if ! $DM ; then
+		if [[ "$PProject" == "mtk" ]]; then
+			sed -i 's/MTK_CTM_SUPPORT_DEBUG[[:space:]]*=[[:space:]]*yes/MTK_CTM_SUPPORT_DEBUG = no/g' bird/make/${Ppath}/${Ppath}.mak
+			grep "MTK_CTM_SUPPORT_DEBUG" bird/make/${Ppath}/${Ppath}.mak
+		else
+			sed -i 's/BIRD_CMCC_OPMANAGER_DEBUG[[:space:]]*=[[:space:]]*yes/BIRD_CMCC_OPMANAGER_DEBUG = no/g' bird/make/${Ppath}/${Ppath}.mak
+			grep "BIRD_CMCC_OPMANAGER_DEBUG" bird/make/${Ppath}/${Ppath}.mak
+		fi 
+	else
+		if [[ "$PProject" == "mtk" ]]; then
+			sed -i 's/MTK_CTM_SUPPORT_DEBUG[[:space:]]*=[[:space:]]*no/MTK_CTM_SUPPORT_DEBUG = yes/g' bird/make/${Ppath}/${Ppath}.mak
+			grep "MTK_CTM_SUPPORT_DEBUG" bird/make/${Ppath}/${Ppath}.mak
+		else
+			sed -i 's/BIRD_CMCC_OPMANAGER_DEBUG[[:space:]]*=[[:space:]]*no/BIRD_CMCC_OPMANAGER_DEBUG = yes/g' bird/make/${Ppath}/${Ppath}.mak
+			grep "BIRD_CMCC_OPMANAGER_DEBUG" bird/make/${Ppath}/${Ppath}.mak
+		fi 
+	fi
+
+}
+
+function checkRange() {
+		read -p "`echo -e "\033[31mInput begin \033[00m:"`" b
+		while :; do
+			if grep '^[[:digit:]]*$' <<< "$b" &>/dev/null;then
+					break
+			fi
+			read -p "`echo -e "\033[31mInput begin \033[00m:"`" b
+		done
+
+		read -p "`echo -e "\033[31mInput end \033[00m:"`" e
+		while :; do
+			if grep '^[[:digit:]]*$' <<< "$e" &>/dev/null;then
+					break
+			fi
+			read -p "`echo -e "\033[31mInput end \033[00m:"`" e
+		done
+
+		read -p "`echo -e "\033[31mInput step \033[00m:"`" s
+		while :; do
+			if grep '^[[:digit:]]*$' <<< "$s" &>/dev/null;then
+				if [ 0 -ne $s ]; then
+					break
+				fi
+			fi
+			read -p "`echo -e "\033[31mInput step \033[00m:"`" s
+		done		
+		mdir=mipi_${b}_${e}
+		if [[ -d $mdir ]] ; then
+			rm -rf $mdir
+		fi
+}
+
+function checkArray() {
+	for a in ${tempmipifile[@]} ; do
+		if [[ "${mipifile[@]/$a/}" == "${mipifile[@]}" ]] ; then
+			return false
+		fi	
+	done
+	mipifile=(${tempmipifile[@]})
+}
+
+function chooseMipiMtk() {
+	mipifile=(`find {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/ -type d | grep "/[^/]*$" -o | cut -d/ -f2 | sort | uniq -c | awk '$1==2 {print $2}' | grep -v "^inc$"`)
+	tempmipifile=(`grep -r "CONFIG_CUSTOM_KERNEL_LCM" bird/make/$Ppath | cut -d'"' -f2 | uniq`)
+	checkArray
+	for ((i=0;i<${#mipifile[@]};i++)) ; do
+		echo -e "\033[33m$i.${mipifile[$i]} \033[00m"
+	done
+	read -p "`echo -e "\033[31mCheck mipifile \033[00m[0-$[${#mipifile[@]}-1]]:"`" tmp
+	while :; do
+		if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+			if [[ "$tmp" -lt ${#mipifile[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+				mipifile=${mipifile[$tmp]}
+				break
+			fi
+		fi
+		read -p "`echo -e "\033[31mCheck mipifile \033[00m[0-$[${#mipifile[@]}-1]]:"`" tmp
+	done	
+	if [ 2 -ne "`ls {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c | wc -l`" ]; then
+		echo "mipifile number != 2!!!"	
+		exit 1
+	fi
+
+	num=`grep "^[[:space:]]*params->dsi.PLL_CLOCK" -rnsI {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c | cut -d= -f2 | cut -d";" -f1 | sed 's/ //g' | uniq `
+	if [[ 1 -ne ` echo "${num[@]}" | uniq | wc -w ` ]] ; then
+		grep "^[[:space:]]*params->dsi.PLL_CLOCK" -rnsI {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c
+		read -p "Input num:" num		
+	fi
+	echo num=$num
+	checkRange
+	mv ${outdir}/{boot.img,lk.bin} ${outdir}/{boot.img-bak,lk.bin-bak} &> /dev/null
+	for (( i=$b,j=$num;i<=$e;j=i,i+=$s)) ; do 
+		sed -i 's/^[[:space:]]*params->dsi.PLL_CLOCK[[:space:]]*=[[:space:]]*'$j'[[:space:]]*[;]/params->dsi.PLL_CLOCK = '$i';/g' {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c
+		grep "^[[:space:]]*params->dsi.PLL_CLOCK" -rnsI {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c
+	
+		rm ${outdir}/{boot.img,lk.bin} &> /dev/null
+
+		now=`date +%s`
+		echo -n "./mk_aliphone.sh ${custom_project} ${PMode} adb lk:"
+		./mk_aliphone.sh ${custom_project} ${PMode} adb lk &>/dev/null
+		if [[ ! -f ${outdir}/lk.bin ]]; then
+			echo "\033[0;31mlk make error!\033[00m"
+			sed -i 's/^[[:space:]]*params->dsi.PLL_CLOCK[[:space:]]*=[[:space:]]*'$j'[[:space:]]*;/params->dsi.PLL_CLOCK = '$num';/g' {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c
+			exit 1		
+		fi
+		echo -e "\033[0;32m Use times:`gettime $now` \033[00m"
+
+		now=`date +%s`
+		echo -n "./mk_aliphone.sh ${custom_project} ${PMode} adb bootimage:"
+		./mk_aliphone.sh ${custom_project} ${PMode} adb bootimage &>/dev/null
+		if [[ ! -f ${outdir}/boot.img ]]; then
+			echo "\033[0;31mbootimage make error!\033[00m"
+			sed -i 's/^[[:space:]]*params->dsi.PLL_CLOCK[[:space:]]*=[[:space:]]*'$j'[[:space:]]*;/params->dsi.PLL_CLOCK = '$num';/g' {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c
+			exit 1		
+		fi
+		echo -e "\033[0;32m Use times:`gettime $now` \033[00m"
+
+		if [[ ! -d $mdir ]] ; then 
+			mkdir $mdir;  
+		fi;  
+		if [[ ! -d $mdir/$i ]] ; then 
+			mkdir $mdir/$i;  
+		fi;  
+		mv ${outdir}/{boot.img,lk.bin} $mdir/$i;  
+	done
+	sed -i 's/^[[:space:]]*params->dsi.PLL_CLOCK[[:space:]]*=[[:space:]]*'$j'[[:space:]]*;/params->dsi.PLL_CLOCK = '$num';/g' {vendor/mediatek/proprietary/bootable/bootloader/lk/dev,kernel-3.18/drivers/misc/mediatek}/lcm/$mipifile/${mipifile}.c
+
+	mv ${outdir}/{boot.img-bak,lk.bin-bak} ${outdir}/{boot.img,lk.bin} &> /dev/null
+	if [[ -d $mdir ]] ; then
+		cd $mdir/ &> /dev/null
+		zip -r ../$mdir ./* &> /dev/null
+		cd - &> /dev/null
+		rm -rf $mdir/
+		echo "${mdir}.zip"
+	fi
+
+}
+function chooseMipiSprd() {
+	mipifile=(`ls {u-boot64,kernel}/drivers/video/sprdfb/lcd/ | sort | uniq -c | awk '$1==2 {print $2}' | grep "[.]c$"`)
+	for ((i=0;i<${#mipifile[@]};i++)) ; do
+		echo -e "\033[33m$i.${mipifile[$i]} \033[00m"
+	done
+	grep "^[[:space:]]*CONFIG.*LCD.*MIPI" -r bird/make/$Ppath | cut -d: -f2
+	read -p "`echo -e "\033[31mCheck mipifile \033[00m[0-$[${#mipifile[@]}-1]]:"`" tmp
+	while :; do
+		if [ -n "`grep '^[[:digit:]]*$' <<< "$tmp"`" ];then
+			if [[ "$tmp" -lt ${#mipifile[@]} ]] && [[ "$tmp" -ge 0 ]]; then
+				mipifile=${mipifile[$tmp]}
+				break
+			fi
+		fi
+		read -p "`echo -e "\033[31mCheck mipifile \033[00m[0-$[${#mipifile[@]}-1]]:"`" tmp
+	done	
+
+	num=`grep "phy_feq[[:space:]]*=" -rnsI {u-boot64,kernel}/drivers/video/sprdfb/lcd/$mipifile | cut -d: -f3 | cut -d. -f2 | cut -d= -f2 | cut -d* -f1 | sed 's/ //g' | uniq `
+
+	if [[ 1 -ne ` echo "${num[@]}" | uniq | wc -w ` ]] ; then
+		grep "phy_feq" -rnsI {u-boot64,kernel}/drivers/video/sprdfb/lcd/$mipifile
+		read -p "Input num:" num
+	fi
+	echo num=$num
+	checkRange
+	mv ${outdir}/{boot.img,u-boot.bin} ${outdir}/{boot.img-bak,u-boot.bin-bak} &> /dev/null
+	for (( i=$b,j=$num;i<=$e;j=i,i+=$s)) ; do 
+		sed -i 's/phy_feq[[:space:]]*=[[:space:]]*'$j'\*1000/phy_feq = '$i'\*1000/g' {u-boot64,kernel}/drivers/video/sprdfb/lcd/$mipifile  
+		grep "phy_feq" -rnsI {u-boot64,kernel}/drivers/video/sprdfb/lcd/$mipifile
+	
+		rm ${outdir}/{boot.img,u-boot.bin} &> /dev/null
+		now=`date +%s`
+		echo -n "make -j8 bootloader:"
+		make -j8 bootloader &> /dev/null
+		if [[ ! -f ${outdir}/u-boot.bin ]]; then
+			echo "\033[0;31mbootloader make error!\033[00m"
+			sed -i 's/phy_feq[[:space:]]*=[[:space:]]*'$j'\*1000/phy_feq = '$num'\*1000/g' {u-boot64,kernel}/drivers/video/sprdfb/lcd/$mipifile
+			exit 1		
+		fi
+		echo -e "\033[0;32m Use times:`gettime $now` \033[00m"
+		now=`date +%s`
+		echo -n "./mk_aliphone.sh ${custom_project} ${PMode} adb bootimage:"
+		#make -j8 bootimage &> /dev/null
+		./mk_aliphone.sh ${custom_project} ${PMode} adb bootimage &>/dev/null
+		if [[ ! -f ${outdir}/boot.img ]]; then
+			echo "\033[0;31mbootimage make error!\033[00m"
+			sed -i 's/phy_feq[[:space:]]*=[[:space:]]*'$j'\*1000/phy_feq = '$num'\*1000/g' {u-boot64,kernel}/drivers/video/sprdfb/lcd/$mipifile
+			exit 1		
+		fi
+		echo -e "\033[0;32m Use times:`gettime $now` \033[00m"
+		if [[ ! -d $mdir ]] ; then 
+			mkdir $mdir;  
+		fi;  
+		if [[ ! -d $mdir/$i ]] ; then 
+			mkdir $mdir/$i;  
+		fi;  
+		mv ${outdir}/{boot.img,u-boot.bin} $mdir/$i;  
+	done
+	sed -i 's/phy_feq[[:space:]]*=[[:space:]]*'$j'\*1000/phy_feq = '$num'\*1000/g' {u-boot64,kernel}/drivers/video/sprdfb/lcd/$mipifile 
+	mv ${outdir}/{boot.img-bak,u-boot.bin-bak} ${outdir}/{boot.img,u-boot.bin} &> /dev/null
+}
+function run() {
+	if [[ "$PType" != "mipi" ]]; then
+		cmd="$custom_project $PMode adb $PType true APR_MODE=off"
+		if [[ "$PShellNum" =~ (1|2|3) ]] && [[ "$PProject" == "mtk" ]]; then
+			cmd=$cmd" WITH_DEXPREOPT=true"
+		fi 
+		case $PShellNum in
+			1):
+				cmd=$cmd" YUNOS_CARRIER_CUSTOM=CMCC_COOP";;
+			2):
+				cmd=$cmd" YUNOS_CARRIER_CUSTOM=CMCC_DEEP_COOP";;
+			3):
+				cmd=$cmd" YUNOS_CARRIER_CUSTOM=CMCC";;
+			4):
+				cmd=$cmd" YUNOS_CARRIER_CUSTOM=CUCC YUNOS_CARRIER_FAKE=true";;
+			5):
+				cmd="$custom_project $PMode adb $PType false APR_MODE=off YUNOS_SUPPORT_CTA=yes";;
+		esac
+		if $sign; then
+			cmd="./mk_aliphone_sign.sh "$cmd" otapackage"	
+		else
+			cmd="./mk_aliphone.sh "$cmd
+		fi
+		echo "$cmd"
+		$cmd &> $logfile
+
+		if [[ -n `tail -n 3 $logfile | grep "failed"` ]] ; then
+			echo -e "\033[0;31m$PType failed!!!  Use times:`gettime $time` \033[00m"
+			exit 1
+		else
+			if $imgout ; then
+				cmd=""
+				if $sign && [[ "$PProject" == "mtk" ]]; then
+					cmd="./imgout $custom_project"
+				elif $sign && [[ "$PProject" == "sprd" ]]; then
+					cmd="./se_imageout"
+				elif [[ "$PProject" == "sprd" ]]; then
+					cmd="./imgout"	
+				fi 
+				echo $cmd
+				$cmd &>/dev/null	
+				if $sign && [[ "$PProject" == "mtk" ]]; then
+					zipname="`grep ro.bird.custom.sw.version out/target/product/${custom_project}/system/build.prop | cut -d= -f2`-sign-`date +%H%M`.zip"
+					echo "zipname=$zipname"
+					if [ -d "release-${custom_project}" ]; then			
+						cd release-${custom_project}
+						zip -r "$zipname" ./*
+						mv "$zipname" .. &> /dev/null
+						cd - &>/dev/null
+					else
+						echo ""
+					fi
+				elif ! $sign && [[ "$PProject" == "sprd" ]]; then 
+					zipname="`grep ro.build.display.id out/target/product/${custom_project}/system/build.prop | cut -d= -f2`-`date +%H%M`.zip"
+					echo "zipname=$zipname"
+					if [ -d "release-${custom_project}" ]; then			
+						cd release-${custom_project}
+						zip -r "$zipname" ./*
+						#mv "$zipname" .. &> /dev/null
+						cd - &>/dev/null
+					else
+						echo ""
+					fi
+				fi
+			else
+				zipname="`grep ro.bird.custom.sw.version ${outdir}/system/build.prop | cut -d= -f2`-`date +%H%M`.zip"
+				cd $outdir
+				if [ -d db ]; then
+					rm -rf db/				
+				fi
+				mkdir db;
+				cp "`ls obj/CGEN/APDB_* | grep "APDB.*_ENUM$" -v`" db
+				cp system/etc/mddb/BPLG* db/
+				echo "Db:`ls db/*`"
+				echo "zip -r \"$zipname\" \`ls --file-type | grep -v \"[^db]/\"\`"
+				zip -r "$zipname" `ls --file-type | grep -v "[^db]/"`
+				mv "${outdir}/$zipname" ..
+				cd - &> /dev/null
+				#echo "mv ${outdir}/$zipname ."
+			fi
+			echo -e "\033[0;32m$PType success!!! Use times:`gettime $time` \033[00m"
+			rm *.log tmp
+		fi
+	else
+		if [[ "$PProject" == "mtk" ]]; then
+			chooseMipiMtk
+		else
+			chooseMipiSprd
+		fi
+		if [[ -d $mdir ]] ; then
+			cd $mdir/ &> /dev/null
+			zip -r ../$mdir ./* &> /dev/null
+			cd - &> /dev/null
+			rm -rf $mdir/
+		fi
+		echo -e "\033[0;32mMipi $b to $e step $s use times:`gettime $time` \033[00m"		
+	fi
+}
+function setOption() {
+	logfile="automake.log"
+	chooseMake $1
+	shift
+	chooseMode $1
+	shift
+	if [ -d 'device/mediatek' ]; then	
+		PProject=mtk
+	elif [ -d 'device/sprd' ]; then
+		PProject=sprd
+	else
+		chooseProject
+	fi
+	chooseType $1
+	shift
+	if [[ "$PType" != "mipi" ]]; then
+		chooseSign $1
+		shift
+		chooseShell $1
+		shift
+		chooseDMTest $1
+		shift
+		if [[ "$PProject" != "mtk" ]] || $sign ; then
+			imgout=true
+		else
+			imgout=false
+		fi
+		echo "======================================================="
+		echo "$Ppath"
+		echo "$PMode"
+		echo "$PType"
+		echo "$PProject"
+		echo "${PShell[$PShellNum]}"
+		echo "sign=$sign"
+		echo "logfile=$logfile"
+		echo "imgout=$imgout"
+		echo "======================================================="
+	else
+		echo "======================================================="
+		echo "$Ppath"
+		echo "$PMode"
+		echo "$PType"
+		echo "$PProject"
+		echo "======================================================="
+	fi
+}
+setOption $@
+sleep 3
+echo "source build/envsetup.sh"
+source build/envsetup.sh &>/dev/null
+echo "./birdCopy $Ppath $PMode"
+if [[ "$PProject" == "mtk" ]]; then
+	echo "I" | ./birdCopy $Ppath $PMode | tee $logfile
+	if [[ "$PType" == "remake" ]] ; then
+		custom_project=(`ls out/target/product/`)
+		echo custom_project=${custom_project[@]}
+		if [[ 1 -ne ${#custom_project[@]} ]]; then
+			read -p "`echo -e "\033[31minput custom project \033[00m:"`" custom_project
+		fi
+	else
+		custom_project=`grep "CUSTOM_PROJECT" $logfile | cut -d= -f2`
+	fi	
+	echo "lunch full_${custom_project}-${PMode}"
+	lunch full_${custom_project}-${PMode} 2>&1 | tee $logfile
+	lunchfile=`grep "does not exist" $logfile | grep "\".*\"" -o | sed 's/"//g'`
+	if [ -n "$lunchfile" ] ; then
+		echo "touch $lunchfile"
+		touch "$lunchfile"
+		echo "lunch full_${custom_project}-${PMode}"
+		lunch full_${custom_project}-${PMode} 2>&1 | tee $logfile
+	fi	
+else
+	./birdCopy $Ppath $PMode
+	MAKEFILE_NAME=bird/make/$Ppath/$Ppath.mak
+	MAKEFILE_COMPILE_VAR=BIRD_PROJECT_NAME
+	ANDROID_PROJECT_NAME=$(./get_string $MAKEFILE_NAME $MAKEFILE_COMPILE_VAR)
+
+	MAKEFILE_COMPILE_VAR=BIRD_TARGET_BOARD
+	custom_project=$(./get_string $MAKEFILE_NAME $MAKEFILE_COMPILE_VAR)
+
+	if [[ $custom_project == BIRD_TARGET_BOARD ]]; then
+		echo -e "\033[31mERROR[android]: BIRD_TARGET_BOARD is undefined!\033[0m"
+		exit
+	fi	
+	echo "lunch ${ANDROID_PROJECT_NAME}-${PMode}"
+	lunch ${ANDROID_PROJECT_NAME}-${PMode}
+fi 
+outdir=out/target/product/${custom_project}
+if [[ "$PType" == "remake" ]]; then
+	echo "rm -rf ${outdir}/system/build.prop"
+	rm -rf ${outdir}/system/build.prop
+	if [[ "$PProject" == "mtk" ]]; then
+		echo "rm -rf ${outdir}/obj/ETC/"
+		rm -rf ${outdir}/obj/ETC/		
+	fi
+	if $sign ; then
+		echo "rm -rf ${outdir}/{system,obj/{APPS,PACKAGING}}"
+		rm -rf ${outdir}/{system,obj/{APPS,PACKAGING}}
+		echo "rm -rf ${outdir}/*.*"
+		rm -rf ${outdir}/*.*
+	fi
+fi
+time=`date +%s`
+run

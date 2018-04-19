@@ -1,0 +1,438 @@
+#!/usr/bin/env python3
+
+# -*-  coding:utf-8 -*-
+import os
+import logging
+import sys
+import shutil
+import tempfile
+import stat
+import subprocess
+import datetime
+
+
+def setlog(open=False):
+    if open:
+        logging.basicConfig(level=logging.DEBUG,
+                            format='[%(filename)s %(asctime)s line:%(lineno)d %(levelname)s]\n%(message)s',
+                            datefmt='%Y-%m-%d %H:%M:%S')
+
+
+def checkchoose(mlist, inputstring="number"):
+    mchoose = input("choose {}:".format(inputstring))
+    while True:
+        if mchoose is None or mchoose == "":
+            return mlist[0]
+        elif mchoose in mlist:
+            return mchoose
+        elif mchoose.isdigit() and (0 <= int(mchoose) < len(mlist)):
+            return mlist[int(mchoose)]
+        else:
+            mchoose = input("\033[31mplease input {} or number:\033[00m".format(inputstring))
+
+
+def printchoose(mlist):
+    for num, name in enumerate(mlist):
+        print("\033[33m{}. {}\033[00m".format(num, name))
+
+
+def getmake(file=None):
+    if file is None or not (os.path.isdir(os.path.join("bird/make", file))):
+        dirs = sorted(os.listdir("bird/make/"))
+        printchoose(dirs)
+        return checkchoose(dirs, "make file")
+    else:
+        return file
+
+
+def getmode(mode=None):
+    modes = ("user", "userdebug", "eng")
+    if mode in modes:
+        return mode
+    else:
+        printchoose(modes)
+        return checkchoose(modes, "mode")
+
+
+def gettype(mtype=None):
+    types = ["new", "remake", "mipi", "target"]
+    if os.path.exists("device/mediatek/"):
+        types.append("差值文件")
+    if mtype in types:
+        return mtype
+    else:
+        printchoose(types)
+        return checkchoose(types, "make type")
+
+
+def gettarget():
+    if os.path.exists("device/mediatek/"):
+        target = ("bootimage", "lk", "pl")
+    else:
+        target = ("bootimage", "bootloader", "chipram")
+    printchoose(target)
+    while True:
+        targetlist = set()
+        mtarget = input("input target number or target split with space:")
+        for i in mtarget.strip().split():
+            if i.isdigit() and 0 <= int(i) < len(target):
+                targetlist.add(target[int(i)])
+            elif i.isalpha() and i in target:
+                targetlist.add(i)
+        if len(targetlist) == len(mtarget.split()) and len(targetlist) > 0:
+            return ' '.join(targetlist)
+            break
+
+
+def getlunch(makefile, makemode):
+    if os.path.exists("device/sprd"):
+        temp = os.popen("grep \"\\(BIRD_TARGET_BOARD\\|BIRD_PROJECT_NAME\\)\" -r bird/make/{0}/{0}.mak | cut -d= -f2 | sed 's/ //g'".
+                        format(makefile)).read().split()
+        return (temp[0].strip(), '{}-{}'.format(temp[1], makemode).strip())
+    elif os.path.exists("device/mediatek"):
+        temp = os.popen("grep CONFIG_ARCH_MTK_PROJECT -r bird/make/{0}/{0}.kuser.mak | cut -d= -f2 | sed 's/ //g'".
+                        format(makefile)).read().split('"')[1].strip()
+        return (temp, 'full_{}-{}'.format(temp, makemode).strip())
+
+
+def getmipi(makefile):
+    mipifile = []
+    if os.path.exists("device/sprd"):
+        with open("bird/make/{0}/{0}.kernel.mak".format(makefile)) as lines:
+            for line in lines:
+                if line.strip().startswith("CONFIG_FB_LCD_") and \
+                        line.split('=')[-1].strip() == "y" and \
+                        not (line.split('=')[0].strip() in "CONFIG_FB_LCD_DUMMY CONFIG_FB_LCD_RESERVE_MEM CONFIG_FB_LCD_OVERLAY_SUPPORT"):
+                    li = line.split('=')[0].split("CONFIG_FB_")[1].strip()
+                    for file in set(os.listdir("kernel/drivers/video/sprdfb/lcd/")) & set(os.listdir("u-boot64/drivers/video/sprdfb/lcd/")):
+                        if li.lower() in file.lower():
+                            mipifile.append(file)
+                    mipipath = ('kernel/drivers/video/sprdfb/lcd/{}', 'u-boot64/drivers/video/sprdfb/lcd/{}')
+    elif os.path.exists("device/mediatek"):
+        for dirname in set(os.listdir("kernel-3.18/drivers/misc/mediatek/lcm/")) & set(
+                os.listdir("vendor/mediatek/proprietary/bootable/bootloader/lk/dev/lcm/")):
+            for file in os.popen("grep CONFIG_CUSTOM_KERNEL_LCM -r bird/make/{0}/{0}.kuser.mak | cut -d= -f2 | sed 's/\"//g'".
+                                 format(makefile)).read().split():
+                if file.lower().startswith(dirname.lower()):
+                    mipifile.append(dirname)
+        mipipath = ('kernel-3.18/drivers/misc/mediatek/lcm/{0}/{0}.c', 'vendor/mediatek/proprietary/bootable/bootloader/lk/dev/lcm/{0}/{0}.c')
+    printchoose(mipifile)
+    mipifile = checkchoose(mipifile, "mipi file")
+    return [path.format(mipifile) for path in mipipath]
+
+
+def getbool(mstr):
+    if mstr in ("True", "False"):
+        return bool(mstr)
+    else:
+        printchoose([False, True])
+        if mstr == "":
+            return False
+        else:
+            return checkchoose([False, True], mstr)
+
+
+def getversion(version=None):
+    versions = ("公开市场版", "CMCC合作", "CMCC深度", "CMCC战略", "CUCC")
+    mlist = {versions[0]: None, versions[1]: "CMCC_COOP", versions[2]: "CMCC_DEEP_COOP", versions[3]: "CMCC", versions[4]: "CUCC"}
+    printchoose(versions)
+    version = mlist[checkchoose(versions, "version")]
+    if version is None:
+        return ""
+    else:
+        return "YUNOS_CARRIER_CUSTOM={}".format(version)
+
+
+def tempsh(cmd):
+    script = '#!/bin/bash\n{0}'.format(cmd)
+    fp = tempfile.NamedTemporaryFile(mode='w+', delete=False)
+    fp.write(script)
+    fp.close()
+    os.chmod(fp.name, stat.S_IRWXU | stat.S_IRGRP |
+             stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+    return fp.name
+
+
+def makeshell(**argv):
+    makecmd = "#!/bin/bash\nexport TIMEFORMAT=$\'Compile time %lR\' \n"
+    argv["MTK"] = "WITH_DEXPREOPT=true" if os.path.exists("device/mediatek") else ""
+    if argv["maketype"] in ("new", "remake"):
+        if os.path.exists("device/alibaba/"):
+            argv["sh"] = "./mk_aliphone_sign.sh" if argv["makesign"] else "./mk_aliphone.sh"
+            argv["ota"] = "otapackage" if argv["makesign"] else ""
+            makecmd += 'echo "I" | ./birdCopy {makefile} {makemode}\n' \
+                       'source build/envsetup.sh &>/dev/null \n' \
+                       'lunch {lunch[1]} &>/dev/null \n' \
+                       'if [ $? -ne 0 ]; then\n ' \
+                       '    echo -e "\\033[31mlunch error\\033[00m" \n' \
+                       '    exit 1\n' \
+                       'fi\n' \
+                       'echo \"{sh} {lunch[0]} {makemode} adb {maketype} true APR_MODE=off {MTK} {version} {ota}\" \n' \
+                       'time {sh} {lunch[0]} {makemode} adb {maketype} true APR_MODE=off {MTK} {version} {ota} &>/dev/null \n'
+        else:
+            makecmd += 'time echo "I" | ./oneCmdMake {makefile} {makemode} \n'
+        makecmd += 'echo "Image Outing!!!" \n'
+        if argv["makesign"]:
+            if argv["MTK"] != "":
+                makecmd += './imgout {lunch[0]} &>/dev/null \n' \
+                           'zipname="`grep ro.bird.custom.sw.version out/target/product/{lunch[0]}/system/build.prop | cut -d= -f2`-sign-`date +%H%M`.zip" \n' \
+                           'if [ -z "zipname" ]; then \n' \
+                           '    zipname="`grep ro.build.display.id out/target/product/{lunch[0]}/system/build.prop | cut -d= -f2`-sign-`date +%H%M`.zip" \n' \
+                           'fi \n' \
+                           'echo "zipname=$zipname" \n' \
+                           'cd release-{lunch[0]} \n' \
+                           'zip -r "$zipname" ./* \n' \
+                           'mv "$zipname" .. &> /dev/null \n' \
+                           'cd - &>/dev/null \n'
+            else:
+                if os.path.exists("oneCmdMake"):
+                    makecmd += './imgout &>/dev/null \n'
+                else:
+                    makecmd += './se_imageout &>/dev/null \n'
+        else:
+            dirname = "release-{makefile}".format(**argv)
+            argv["dirname"] = dirname
+            if not os.path.exists(dirname):
+                os.mkdir(dirname)
+            if argv["MTK"] != "":
+                makecmd += './imgout {lunch[0]} &>/dev/null \n' \
+                           'zipname="`grep ro.bird.custom.sw.version out/target/product/{lunch[0]}/system/build.prop | cut -d= -f2`-`date +%H%M`.zip" \n' \
+                           'if [ -z "zipname" ]; then \n' \
+                           '    zipname="`grep ro.build.display.id out/target/product/{lunch[0]}/system/build.prop | cut -d= -f2`-`date +%H%M`.zip" \n' \
+                           'fi \n' \
+                           'echo "zipname=$zipname" \n' \
+                           'cd release-{lunch[0]} \n' \
+                           'zip -r "$zipname" ./* \n' \
+                           'mv "$zipname" ../{dirname} &> /dev/null \n' \
+                           'cd - &>/dev/null \n'
+            else:
+                makecmd += './imgout &>/dev/null \n' \
+                           'zipname="`grep ro.build.display.id out/target/product/{lunch[0]}/system/build.prop | cut -d= -f2`-`date +%H%M`.zip" \n' \
+                           'echo "zipname=$zipname" \n' \
+                           'cd release-{lunch[0]} \n' \
+                           'zip -r "$zipname" ./* \n' \
+                           'mv "$zipname" ../{dirname} &> /dev/null \n' \
+                           'cd - &>/dev/null \n'
+
+        try:
+            if argv["maketype"] == "new" and os.exists("out/") and os.exists("oneCmdMake"):
+                shutil.rmtree("out/")
+            elif argv["maketype"] == "remake":
+                os.remove('out/target/product/{lunch[0]}/system/build.prop'.format(**argv))
+                if argv["MTK"] != "":
+                    shutil.rmtree('out/target/product/{lunch[0]}/obj/ETC/'.format(**argv))
+                if argv["makesign"]:
+                    shutil.rmtree('out/target/product/{lunch[0]}/system'.format(**argv))
+                    shutil.rmtree('out/target/product/{lunch[0]}/obj/APPS'.format(**argv))
+                    shutil.rmtree('out/target/product/{lunch[0]}/obj/PACKAGING'.format(**argv))
+        except Exception as e:
+            pass
+    elif argv["maketype"] in ("target"):
+        makecmd += 'echo "I" | ./birdCopy {makefile} {makemode}\n' \
+                   'source build/envsetup.sh &>/dev/null \n' \
+                   'lunch {lunch[1]} &>/dev/null \n' \
+                   'if [ $? -ne 0 ]; then\n ' \
+                   '    echo -e "\\033[31mlunch error\\033[00m" \n' \
+                   '    exit 1\n' \
+                   'fi\n' \
+                   'echo \"make -j{cpu} {target}\" \n' \
+                   'time make -j{cpu} {target} &>/dev/null \n'
+
+        if os.path.exists("sprd_secure_boot_tool"):
+            dirname = "release-{lunch[0]}".format(**argv)
+            argv["dirname"] = dirname
+            if not os.path.exists(dirname):
+                os.mkdir(dirname)
+            temp = 'cd sprd_secure_boot_tool \n' \
+                   './sig_script.sh ../{dirname}/ &>/dev/null \n'
+            if "bootimage" in argv["target"]:
+                argv["bootimage"] = ["boot.img", "boot-sign.img"]
+                makecmd += 'mv out/target/product/{lunch[0]}/boot.img {dirname}/ \n'
+                temp += 'mv ../{dirname}/boot-sign.img ../{dirname}/boot.img \n'
+            if "bootloader" in argv["target"]:
+                makecmd += 'mv out/target/product/{lunch[0]}/u-boot.bin {dirname}/ \n'
+                temp += 'mv ../{dirname}/fdl2-sign.bin ../{dirname}/u-boot.bin \n'
+            temp += 'cd - &> /dev/null \n'
+            makecmd += temp
+    elif argv["maketype"] in ("mipi"):
+        try:
+            if "start" in argv.keys():
+                dirname = "mipi_{start}_{stop}".format(**argv)
+            else:
+                dirname = "mipi_{}".format('_'.join(argv["mipilist"].split()))
+            os.mkdir(dirname)
+        except Exception as e:
+            shutil.rmtree(dirname)
+            os.mkdir(dirname)
+        argv["dirname"] = dirname
+        if argv["MTK"] != "":
+            argv["sedstr"] = "'s/^[[:space:]]*params->dsi.PLL_CLOCK[[:space:]]*=[[:space:]]*'$j'[[:space:]]*[;]/params->dsi.PLL_CLOCK = '$i';/g'"
+            argv["resetstr"] = "'s/^[[:space:]]*params->dsi.PLL_CLOCK[[:space:]]*=[[:space:]]*'$j'[[:space:]]*;/params->dsi.PLL_CLOCK = '{value}';/g'".format(**argv)
+            argv["grepstr"] = "'^[[:space:]]*params->dsi.PLL_CLOCK' -rnsI --color"
+            argv["target"] = ["lk", "lk.bin"]
+        else:
+            argv["sedstr"] = "'s/phy_feq[[:space:]]*=[[:space:]]*'$j'\*1000/phy_feq = '$i'\*1000/g'"
+            argv["resetstr"] = "'s/phy_feq[[:space:]]*=[[:space:]]*'$j'\*1000/phy_feq = {value}\*1000/g'".format(**argv)
+            argv["grepstr"] = "'phy_feq' -rnsI --color"
+            argv["target"] = ["bootloader", "u-boot.bin"]
+
+        makecmd += 'echo "I" | ./birdCopy {makefile} {makemode}\n' \
+                   'source build/envsetup.sh &>/dev/null \n' \
+                   'lunch {lunch[1]} &>/dev/null \n' \
+                   'if [ $? -ne 0 ]; then\n ' \
+                   '    echo -e "\\033[31mlunch error\\033[00m" \n' \
+                   '    exit 1\n' \
+                   'fi\n'
+        makecmd += 'for (( i={start},j={value};i<={stop};j=i,i+={step})) ; do\n ' \
+                   if "start" in argv else 'j={value} \nfor i in {mipilist} ; do\n'
+        makecmd += '    sed -i {sedstr} {mipifile[0]} {mipifile[1]}\n' \
+                   '    grep {grepstr} {mipifile[0]} {mipifile[1]}\n' \
+                   '    echo \"make -j{cpu} bootimage {target[0]}\" \n' \
+                   '    time make -j{cpu} bootimage {target[0]} &>/dev/null \n' \
+                   '    if [ $? -ne 0 ]; then\n ' \
+                   '        echo -e "\\033[31mmake error\\033[00m" \n' \
+                   '        exit 1\n' \
+                   '    fi\n' \
+                   '    mkdir {dirname}/$i \n' \
+                   '    mv out/target/product/{lunch[0]}/boot.img {dirname}/$i/boot.img\n' \
+                   '    mv out/target/product/{lunch[0]}/{target[1]} {dirname}/$i/{target[1]}\n'
+        makecmd += '    cd sprd_secure_boot_tool \n' \
+                   '    ./sig_script.sh ../{dirname}/$i/ &>/dev/null \n' \
+                   '    mv ../{dirname}/$i/boot-sign.img ../{dirname}/$i/boot.img \n' \
+                   '    mv ../{dirname}/$i/fdl2-sign.bin ../{dirname}/$i/u-boot.bin \n' \
+                   '    cd - &> /dev/null \n' if os.path.exists("sprd_secure_boot_tool") else ""
+        makecmd += '    j=i\ndone\n' if "start" in argv else 'done\n'
+        makecmd += 'sed -i {resetstr} {mipifile[0]} {mipifile[1]}\n' \
+                   'zip -r {dirname}.zip {dirname}/ &>/dev/null\n' \
+                   'rm -rf {dirname}/'
+    elif argv["maketype"] in ("差值文件"):
+        makecmd += 'echo "I" | ./birdCopy {makefile} {makemode}\n' \
+                   'source build/envsetup.sh &>/dev/null \n' \
+                   'lunch {lunch[1]} &>/dev/null \n' \
+                   'if [ $? -ne 0 ]; then\n ' \
+                   '    echo -e "\\033[31mlunch error\\033[00m" \n' \
+                   '    exit 1\n' \
+                   'fi\n' \
+                   "mTarget=`grep \"TARGET_BOARD_PLATFORM\" -r device/alibaba/{lunch[0]}/BoardConfig.mk | cut -d= -f2 | sed 's/ //g'`\n" \
+                   ' if [ $mTarget == "mt6753" ]; then \n ' \
+                   '    mTarget=mt6735 \n' \
+                   ' else \n' \
+                   '    mTarget=mt6735m \n' \
+                   ' fi \n' \
+                   'echo "mmm vendor/mediatek/proprietary/custom/mt6735/hal/" \n' \
+                   'time mmm vendor/mediatek/proprietary/custom/mt6735/hal/ &>/dev/null \n ' \
+                   'touch ./vendor/mediatek/proprietary/hardware/mtkcam/legacy/v1/common/paramsmgr/feature/custom/custom.cpp \n' \
+                   'echo "mmm -b ./vendor/mediatek/proprietary/hardware/mtkcam/legacy/v1/common/paramsmgr" \n' \
+                   'time mmm -b ./vendor/mediatek/proprietary/hardware/mtkcam/legacy/v1/common/paramsmgr &> /dev/null \n' \
+                   'echo "mmm -b ./vendor/mediatek/proprietary/hardware/mtkcam/legacy/platform/$mTarget/v1/common/paramsmgr" \n' \
+                   'time mmm -b ./vendor/mediatek/proprietary/hardware/mtkcam/legacy/platform/$mTarget/v1/common/paramsmgr &> /dev/null \n' \
+                   'echo "mmm -b ./vendor/mediatek/proprietary/hardware/mtkcam/legacy/platform/$mTarget/hal/sensor/" \n' \
+                   'time mmm -b ./vendor/mediatek/proprietary/hardware/mtkcam/legacy/platform/$mTarget/hal/sensor/ &> /dev/null \n'
+
+    makecmd += 'unset TIMEFORMAT \n'
+    return tempsh(makecmd.format(**argv))
+
+
+def main(*argv):
+    if not os.path.exists("bird/"):
+        raise SystemError("Path Error!")
+    makefile = getmake()
+    maketype = gettype()
+    if not os.path.exists("out/target/product/*/system/build.prop") or maketype == "new":
+        makemode = getmode()
+        lunch = getlunch(makefile, makemode)
+    else:
+        makemode = os.popen("grep ro.build.flavor -r out/target/product/*/system/build.prop | cut -d= -f2 | sed 's/ //g'".
+                            format(makefile)).read().split('-')[-1].strip()
+        lunch = getlunch(makefile, makemode)
+    logging.debug(lunch)
+    if maketype == "mipi":
+        mipifile = getmipi(makefile)
+        if os.path.exists("device/mediatek"):
+            value = [os.popen("grep \"^[[:space:]]*params->dsi.PLL_CLOCK\" -r {0} | cut -d= -f2 | cut -d';' -f1 | sed 's/ //g'".
+                              format(mfile)).read().strip() for mfile in mipifile]
+        else:
+            value = [os.popen("grep \"phy_feq[[:space:]]*=\" -r {0}  | cut -d= -f2 | cut -d* -f1 | sed 's/ //g'".
+                              format(mfile)).read().strip() for mfile in mipifile]
+        if value.count(value[0]) == 2:
+            value = value[0]
+        else:
+            SystemError("mipi value different", value)
+        print("mipi={}".format(value))
+
+        logging.debug(mipifile)
+        if getbool("range is linear"):
+            while True:
+                try:
+                    mipilist = range(int(input("begin:")), int(input("end:")), int(input("step:")))
+                    print(mipilist, len(mipilist))
+                    if len(mipilist) > 0:
+                        break
+                except Exception as e:
+                    pass
+            mipilist = {"start": mipilist.start, "stop": mipilist.stop, "step": mipilist.step}
+        else:
+            while True:
+                temp = input("input mipi number split with space:")
+                mipilist = [i.strip() for i in temp.split() if i.isdigit()]
+                if len(mipilist) == len(temp.split()) and len(mipilist) > 0:
+                    break
+            mipilist = " ".join(mipilist)
+    elif maketype == "target":
+        target = gettarget()
+        logging.debug(target)
+    elif maketype in ("new", "remake"):
+        makesign = getbool("sign")
+        logging.debug(makesign)
+        if os.path.exists("device/alibaba/"):
+            version = getversion()
+            if version in ['YUNOS_CARRIER_CUSTOM={}'.format(i) for i in ("CMCC_COOP", "CMCC_DEEP_COOP", "CMCC")]:
+                print(os.popen("  sed -i 's/{0}[[:space:]]*=[[:space:]].*/{0} = {2}/g' bird/make/{1}/{1}.mak \n"
+                               "  grep \"{0}\" bird/make/{1}/{1}.mak \n".format(
+                                   "MTK_CTM_SUPPORT_DEBUG" if os.path.exists("device/mediatek") else "BIRD_CMCC_OPMANAGER_DEBUG",
+                                   makefile, "no" if makesign or not getbool("DM DEBUG") else "yes")).read())
+
+    parms = {}
+    parms["cpu"] = 8#os.cpu_count()
+    for parm in ("makefile", "maketype", "mipifile", "makemode", "lunch", "mipilist", "makesign", "version", "value", "target"):
+        try:
+            if isinstance(eval(parm), dict):
+                parms.update(eval(parm))
+            else:
+                parms[parm] = eval(parm)
+        except Exception as e:
+            continue
+    for key, value in sorted(parms.items()):
+        print("\033[33m{}:{}\033[00m".format(key, value))
+    shell = makeshell(**parms)
+    try:
+        begintime = datetime.datetime.now()
+        input("\nPress any key to continue!")
+        process = subprocess.Popen(shell, shell=True)
+        ''', stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+        while True:
+            if isinstance(process.stdout.readline(), bytes):
+                nextline = process.stdout.readline().decode('utf-8')
+            else:
+                nextline = process.stdout.readline()
+            if nextline == '' and process.poll() is not None:
+                break
+            sys.stdout.write(nextline)
+            sys.stdout.flush()
+        '''
+        output = process.communicate()[0]
+        exitCode = process.returncode
+        endtime = datetime.datetime.now()
+        if (exitCode == 0):
+            print("\033[0;32mSuccess!!! Used:{}\033[00m".format(endtime - begintime))
+        else:
+            print("\033[0;31mFailed!!! Used:{}\033[00m".format(endtime - begintime))
+            os.system('cat {}'.format(shell))
+            raise subprocess.CalledProcessError(exitCode, shell, output=output)
+    finally:
+        os.remove(shell)
+
+
+if __name__ == "__main__":
+    main(sys.argv)
