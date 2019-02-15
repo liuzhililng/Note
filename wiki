@@ -1,0 +1,56 @@
+1、Preference summary 颜色设置
+通过preference的layout知道，preference的title，summary的颜色分别是与主题中的textColorPrimary以及textColorSecondary 绑定的
+
+        <TextView android:id="@id/title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:textAppearance="?android:attr/textAppearanceListItem"
+            android:ellipsize="marquee" />
+        <TextView android:id="@id/summary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/title"
+            android:layout_alignStart="@id/title"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?android:attr/textAppearanceListItemSecondary"
+            android:textColor="?android:attr/textColorSecondary"
+            android:maxLines="10"
+            android:ellipsize="end" />
+
+所以我们想只修改某个preference的summary颜色则没办法修改，所以在控件中提供了接口以及可以在style中修改
+首先我们在attrs.xml中定义Preference的属性wosPreferenceSummaryTextColor，并且在preferenceStyle中配置wosPreferenceSummaryTextColor
+
+        <item name="wosPreferenceSummaryTextColor">?android:attr/textColorSecondary</item>
+这样我们就可以在Preference的构造方法中拿到我们在style中配置的color
+        mSummaryTextColor = a.getColorStateList(R.styleable.Preference_wosPreferenceSummaryTextColor);
+然后在Preference中的onbindVIew方法中给summaryVIew设置TextColor
+        final TextView summaryView = (TextView) view.findViewById(
+                R.id.summary);
+        if (summaryView != null) {
+            final CharSequence summary = getSummary();
+            if (!TextUtils.isEmpty(summary)) {
+                summaryView.setText(summary);
+                summaryView.setVisibility(View.VISIBLE);
+                summaryView.setTextColor(mSummaryTextColor);//设置summary颜色未我们style中配置的颜色
+            } else {
+                summaryView.setVisibility(View.GONE);
+            }
+        }
+所以我们如果想单独修改某一个preference的颜色，也同样可以通过在xml中preference 添加wosPreferenceSummaryTextColor属性来设置当前preference的summary字体颜色
+    <PreferenceScreen
+        app:woskey="test_preferencescrenn"
+        app:wostitle="test_preferencescrenn"
+        app:wossummary="this si preferenceScreen"
+        app:wosPreferenceSummaryTextColor="@color/item_selector_color">
+    </PreferenceScreen>
+另外我们也提供了代码中动态设置summary字体的颜色接口。可以通过findPreference（String key）拿到当前的Preference，然后通过调用以下方法动态设置summary的字体颜色
+    public void setSummaryTextColor(@ColorInt int  color){
+        mSummaryTextColor = ColorStateList.valueOf(color);
+    }
+    public void setSummaryTextColor( ColorStateList  colorStateList){
+        if(colorStateList == null){
+            throw new NullPointerException();
+        }
+        mSummaryTextColor = colorStateList;
+    }
