@@ -49,3 +49,7 @@ $(shell cp -rf $(LOCAL_PATH)/libs/*.so $(TARGET_OUT)/lib)
 8、MTK电池配置走DTS不走custom下的table表
 kernel-3.18-drivers/misc/mediatek/include/mt-plat/mt6580/include/mach/upmu_sw.h 
 define BATTERY_DTS_SUPPORT
+删掉开机向导状态栏不可用：
+adb shell
+settings put global device_provisioned 1
+settings put secure user_setup_complete 1
